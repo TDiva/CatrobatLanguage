@@ -140,6 +140,8 @@ public class HomeController {
 			throw new UploadException();
 		YamlProject project = new YamlProject(Translator.getInstance()
 				.loadProjectFromXML(xmlProject));
+		Translator.getInstance().convertFromXMLToCatrobatLanguage(xmlProject, tempPath + File.separator
+				+ request.getSession().getId());
 		return project;
 	}
 
@@ -175,8 +177,8 @@ public class HomeController {
 			Model model, HttpServletRequest request, HttpSession session)
 			throws IOException {
 
-		if (file == null)
-			return home(model, request);
+		if (file == null || file.getSize() == 0)
+			return error(model,"No file selected!", "Please, select .catrobat file for uploading.");
 		if (!isCatrobatFile(file.getOriginalFilename())) {
 			return error(
 					model,

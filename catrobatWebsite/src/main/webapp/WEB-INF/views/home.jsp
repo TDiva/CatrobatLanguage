@@ -3,6 +3,7 @@
 <html>
 <head>
 <%@include file="top-scripts.jspf"%>
+<meta charset="utf-8"/>
 </head>
 <body>
 	<%@include file="header.jspf"%>
@@ -57,9 +58,9 @@
 												<h4>Looks:</h4>
 												<ul class="thumbnails">
 													<c:forEach var="look" items="${entry.value.looks}">
-														<li><a href="${look.value}"><img
-																src="${look.value}" alt="${look.key}"
-																title="${look.key}" class="thumbnail img=rounded"
+														<li><a href="image/${look.value}"><img
+																src="image/${look.value}" alt="${look.key}"
+																title="${look.value}" class="thumbnail img=rounded"
 																height="140px" width="140px"> </a></li>
 													</c:forEach>
 												</ul>
@@ -71,8 +72,8 @@
 												<div class="span6">
 													<c:forEach var="sound" items="${entry.value.sounds}">
 														<audio controls data-info-att="${sound.key}">
-															<source src="${sound.value}" type="audio/mpeg" />
-															<a href="${sound.value}">${sound.key}</a>
+															<source src="sound/${sound.value}" type="audio/mp3" />
+															<a href="sound/${sound.value}">${sound.key}</a>
 														</audio>
 													</c:forEach>
 												</div>

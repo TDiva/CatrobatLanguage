@@ -3,13 +3,16 @@ package org.catrobat.catroid;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.UUID;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
 
 import net.lingala.zip4j.core.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
@@ -31,8 +34,18 @@ import org.springframework.web.multipart.MultipartFile;
 @Controller
 public class HomeController {
 
-	private class UploadException extends Exception {
+	static Path tempPath;
+	static {
+		try {
+			tempPath = Files.createTempDirectory("catrobatTemp");
+			tempPath.toFile().deleteOnExit();
+			tempPath = tempPath.getParent();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
 
+	private class UploadException extends Exception {
 		private static final long serialVersionUID = 1L;
 	}
 
@@ -94,11 +107,9 @@ public class HomeController {
 	private Map<String, String> createLooksMap(List<LookData> looks,
 			HttpServletRequest request) {
 		Map<String, String> looksMap = new TreeMap<String, String>();
-
 		for (LookData item : looks) {
-			looksMap.put(item.getName(),
-					request.getSession().getAttribute("projectFolder")
-							+ "/images/" + item.getFileName());
+			looksMap.put(item.getName(), item.getFileName());
+
 		}
 		return looksMap;
 	}
@@ -106,11 +117,8 @@ public class HomeController {
 	private Map<String, String> createSoundsMap(List<SoundInfo> sounds,
 			HttpServletRequest request) {
 		Map<String, String> soundsMap = new TreeMap<String, String>();
-
 		for (SoundInfo item : sounds) {
-			soundsMap.put(item.getName(),
-					request.getSession().getAttribute("projectFolder")
-							+ "/sounds/" + item.getFileName());
+			soundsMap.put(item.getName(), item.getFileName());
 		}
 		return soundsMap;
 	}
@@ -126,9 +134,8 @@ public class HomeController {
 
 	private YamlProject getProject(HttpServletRequest request)
 			throws UploadException {
-		File xmlProject = new File((String) request.getSession().getAttribute(
-				"fullPathToProject")
-				+ "\\code.xml");
+		File xmlProject = new File(tempPath + File.separator
+				+ request.getSession().getId() + File.separator + "code.xml");
 		if (!xmlProject.exists())
 			throw new UploadException();
 		YamlProject project = new YamlProject(Translator.getInstance()
@@ -165,7 +172,8 @@ public class HomeController {
 	@RequestMapping(value = "/*", method = RequestMethod.POST)
 	public String Upload(
 			@RequestParam(value = "file", required = true) MultipartFile file,
-			Model model, HttpServletRequest request) throws IOException {
+			Model model, HttpServletRequest request, HttpSession session)
+			throws IOException {
 
 		if (file == null)
 			return home(model, request);
@@ -176,26 +184,21 @@ public class HomeController {
 					"File you tried to upload is not .catrobat file. Please, upload catrobat project (e. g.\"project.catrobat\")");
 
 		}
-
-		String appFolder = request.getSession().getServletContext()
-				.getRealPath("/");
-		String uploadFolder = getUploadFolder(request);
-
+		Path tempDir;
 		try {
-			createProjectDir(appFolder, uploadFolder);
-		} catch (UploadException e1) {
+			tempDir = createTempDir(file, session.getId());
+		} catch (IOException e1) {
 			return error(
 					model,
 					"Cannot create directory for project",
 					"Oops, it seems we have some internal error. Please, try one more time and do mot hurry.");
 		}
 
-		String filePath = appFolder + uploadFolder + "\\"
-				+ file.getOriginalFilename();
-
+		File tempFile = new File(tempDir.toString() + File.separator
+				+ file.getOriginalFilename());
 		FileOutputStream outputStream = null;
 		try {
-			outputStream = new FileOutputStream(new File(filePath));
+			outputStream = new FileOutputStream(tempFile);
 			outputStream.write(file.getBytes());
 			outputStream.close();
 		} catch (Exception e) {
@@ -203,12 +206,10 @@ public class HomeController {
 					.toString());
 		}
 
-		setPathsToSesisionAttributes(request, appFolder, uploadFolder);
-
 		ZipFile zip;
 		try {
-			zip = new ZipFile(filePath);
-			zip.extractAll(appFolder + uploadFolder);
+			zip = new ZipFile(tempFile);
+			zip.extractAll(tempDir.toString());
 		} catch (ZipException e) {
 			return error(model, "Cannot unzip project file", e.getStackTrace()
 					.toString());
@@ -217,37 +218,19 @@ public class HomeController {
 		return home(model, request);
 	}
 
-	private void setPathsToSesisionAttributes(HttpServletRequest request,
-			String appFolder, String uploadFolder) {
-		request.getSession().setAttribute("projectFolder",
-				uploadFolder.replace("\\", "/"));
-		request.getSession().setAttribute("fullPathToProject",
-				appFolder + uploadFolder);
-	}
-
-	private void createProjectDir(String appFolder, String uploadFolder)
-			throws IOException, UploadException {
-		File projectDir = new File(appFolder + uploadFolder);
-		if (projectDir.exists())
-			FileUtils.deleteDirectory(projectDir);
-		if (!projectDir.mkdir())
-			throw new UploadException();
+	private Path createTempDir(MultipartFile file, String id)
+			throws IOException {
+		Path dirPath = Paths.get(tempPath + File.separator + id);
+		if (dirPath.toFile().exists()) {
+			FileUtils.deleteDirectory(dirPath.toFile());
+		}
+		return Files.createDirectory(dirPath);
 	}
 
 	private boolean isCatrobatFile(String name) {
 		return (name.substring(name.length() - 8, name.length()).toLowerCase()
 				.equals("catrobat"));
 
-	}
-
-	private String getUploadFolder(HttpServletRequest request) {
-		String uploadFolder = null;
-		if (request.getSession().getAttribute("projectFolder") != null)
-			uploadFolder = ((String) request.getSession().getAttribute(
-					"projectFolder")).replace("/", "\\");
-		else
-			uploadFolder = "resources\\upload\\" + UUID.randomUUID().toString();
-		return uploadFolder;
 	}
 
 	private String error(Model model, String title, String msg) {
